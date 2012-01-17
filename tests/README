@@ -1,0 +1,5 @@
+Tests for syscalls cgroup subsystem
+===================================
+
+Subsystem comes with set of performance and system tests. For further info go to
+'performance' or 'system' directory.

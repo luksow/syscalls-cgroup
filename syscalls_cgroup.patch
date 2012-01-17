@@ -1,3 +1,485 @@
+diff --git a/arch/x86/ia32/ia32entry.S b/arch/x86/ia32/ia32entry.S
+index a6253ec..f0d03a9 100644
+--- a/arch/x86/ia32/ia32entry.S
++++ b/arch/x86/ia32/ia32entry.S
+@@ -13,6 +13,7 @@
+ #include <asm/thread_info.h>	
+ #include <asm/segment.h>
+ #include <asm/irqflags.h>
++#include <asm/unistd_64.h>
+ #include <linux/linkage.h>
+ 
+ /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
+@@ -160,6 +161,37 @@ ENTRY(ia32_sysenter_target)
+ sysenter_do_call:
+ 	IA32_ARG_FIXUP
+ sysenter_dispatch:
++#ifdef CONFIG_CGROUP_SYSCALLS
++	GET_THREAD_INFO(%r10)
++	testl $_TIF_SYSCALL_USE_CGROUP,TI_flags(%r10)
++	jz syscalls_cgroup_skip_ia32_sysenter_target
++	pushq %rax
++	pushq %rdi
++	pushq %rsi
++	pushq %rdx
++	pushq %rcx
++	pushq %r8
++	pushq %r9
++	pushq %r10
++	pushq %r11
++	movl ia32_syscalls_cgroup_compat(,%rax,4),%edi
++	cmpl $-1,%edi
++	je syscalls_cgroup_restore_ia32_sysenter_target
++	call syscalls_cgroup_perm
++	cmpl $0,%eax
++syscalls_cgroup_restore_ia32_sysenter_target:
++	popq %r11
++	popq %r10
++	popq %r9
++	popq %r8
++	popq %rcx
++	popq %rdx
++	popq %rsi
++	popq %rdi
++	popq %rax
++	je ia32_badsys
++syscalls_cgroup_skip_ia32_sysenter_target:
++#endif
+ 	call	*ia32_sys_call_table(,%rax,8)
+ 	movq	%rax,RAX-ARGOFFSET(%rsp)
+ 	GET_THREAD_INFO(%r10)
+@@ -319,6 +351,37 @@ ENTRY(ia32_cstar_target)
+ cstar_do_call:
+ 	IA32_ARG_FIXUP 1
+ cstar_dispatch:
++#ifdef CONFIG_CGROUP_SYSCALLS
++	GET_THREAD_INFO(%r10)
++	testl $_TIF_SYSCALL_USE_CGROUP,TI_flags(%r10)
++	jz syscalls_cgroup_skip_ia32_cstar_target
++	pushq %rax
++	pushq %rdi
++	pushq %rsi
++	pushq %rdx
++	pushq %rcx
++	pushq %r8
++	pushq %r9
++	pushq %r10
++	pushq %r11
++	movl ia32_syscalls_cgroup_compat(,%rax,4),%edi
++	cmpl $-1,%edi
++	je syscalls_cgroup_restore_ia32_cstar_target
++	call syscalls_cgroup_perm
++	cmpl $0,%eax
++syscalls_cgroup_restore_ia32_cstar_target:
++	popq %r11
++	popq %r10
++	popq %r9
++	popq %r8
++	popq %rcx
++	popq %rdx
++	popq %rsi
++	popq %rdi
++	popq %rax
++	je ia32_badsys
++syscalls_cgroup_skip_ia32_cstar_target:
++#endif
+ 	call *ia32_sys_call_table(,%rax,8)
+ 	movq %rax,RAX-ARGOFFSET(%rsp)
+ 	GET_THREAD_INFO(%r10)
+@@ -428,6 +491,37 @@ ENTRY(ia32_syscall)
+ 	ja ia32_badsys
+ ia32_do_call:
+ 	IA32_ARG_FIXUP
++#ifdef CONFIG_CGROUP_SYSCALLS
++	GET_THREAD_INFO(%r10)
++	testl $_TIF_SYSCALL_USE_CGROUP,TI_flags(%r10)
++	jz syscalls_cgroup_skip_ia32_syscall
++	pushq %rax
++	pushq %rdi
++	pushq %rsi
++	pushq %rdx
++	pushq %rcx
++	pushq %r8
++	pushq %r9
++	pushq %r10
++	pushq %r11
++	movl ia32_syscalls_cgroup_compat(,%rax,4),%edi
++	cmpl $-1,%edi
++	je syscalls_cgroup_restore_ia32_syscall
++	call syscalls_cgroup_perm
++	cmpl $0,%eax
++syscalls_cgroup_restore_ia32_syscall:
++	popq %r11
++	popq %r10
++	popq %r9
++	popq %r8
++	popq %rcx
++	popq %rdx
++	popq %rsi
++	popq %rdi
++	popq %rax
++	je ia32_badsys
++syscalls_cgroup_skip_ia32_syscall:
++#endif
+ 	call *ia32_sys_call_table(,%rax,8) # xxx: rip relative
+ ia32_sysret:
+ 	movq %rax,RAX-ARGOFFSET(%rsp)
+@@ -853,3 +947,354 @@ ia32_sys_call_table:
+ 	.quad compat_sys_process_vm_readv
+ 	.quad compat_sys_process_vm_writev
+ ia32_syscall_end:
++#ifdef CONFIG_CGROUP_SYSCALLS
++	.align 4
++ia32_syscalls_cgroup_compat:
++	/* 64bit syscall */		/* IA32 syscall*/
++	.long -1			/* sys_restart_syscall */
++	.long __NR_exit			/* sys_exit */
++	.long __NR_fork			/* stub32_fork */
++	.long __NR_read			/* sys_read */
++	.long __NR_write		/* sys_write */
++	.long __NR_open			/* compat_sys_open */
++	.long __NR_close		/* sys_close */
++	.long -1			/* sys32_waitpid */
++	.long __NR_creat		/* sys_creat */
++	.long __NR_link			/* sys_link */
++	.long __NR_unlink		/* sys_unlink */
++	.long __NR_execve		/* stub32_execve */
++	.long __NR_chdir		/* sys_chdir */
++	.long __NR_time			/* compat_sys_time */
++	.long __NR_mknod		/* sys_mknod */
++	.long __NR_chmod		/* sys_chmod */
++	.long __NR_lchown		/* sys_lchown16 */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_stat			/* sys_stat */
++	.long __NR_lseek		/* sys32_lseek */
++	.long __NR_getpid		/* sys_getpid */
++	.long __NR_mount		/* compat_sys_mount */
++	.long -1			/* sys_oldumount */
++	.long __NR_setuid		/* sys_setuid16 */
++	.long __NR_getuid		/* sys_getuid16 */
++	.long __NR_time			/* compat_sys_stime */
++	.long __NR_ptrace		/* compat_sys_ptrace */
++	.long __NR_alarm		/* sys_alarm */
++	.long __NR_fstat		/* sys_fstat */
++	.long __NR_pause		/* sys_pause */
++	.long -1			/* compat_sys_utime */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_access		/* sys_access */
++	.long -1			/* sys_nice */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_sync			/* sys_sync */
++	.long __NR_kill			/* sys32_kill */
++	.long __NR_rename		/* sys_rename */
++	.long __NR_mkdir		/* sys_mkdir */
++	.long __NR_rmdir		/* sys_rmdir */
++	.long __NR_dup			/* sys_dup */
++	.long __NR_pipe			/* sys_pipe */
++	.long __NR_times		/* compat_sys_times */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_brk			/* sys_brk */
++	.long __NR_setgid		/* sys_setgid16 */
++	.long __NR_getgid		/* sys_getgid16 */
++	.long -1			/* sys_signal */
++	.long __NR_geteuid		/* sys_geteuid16 */
++	.long __NR_getegid		/* sys_getegid16 */
++	.long __NR_acct			/* sys_acct */
++	.long __NR_umount2		/* sys_umount */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_ioctl		/* compat_sys_ioctl */
++	.long __NR_fcntl		/* compat_sys_fcntl64 */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_setpgid		/* sys_setpgid */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* sys_olduname */
++	.long __NR_umask		/* sys_umask */
++	.long __NR_chroot		/* sys_chroot */
++	.long __NR_ustat		/* compat_sys_ustat */
++	.long __NR_dup2			/* sys_dup2 */
++	.long __NR_getppid		/* sys_getppid */
++	.long __NR_getpgrp		/* sys_getpgrp */
++	.long __NR_setsid		/* sys_setsid */
++	.long -1			/* sys32_sigaction */
++	.long -1			/* sys_sgetmask */
++	.long -1			/* sys_ssetmask */
++	.long __NR_setreuid		/* sys_setreuid16 */
++	.long __NR_setregid		/* sys_setregid16 */
++	.long -1			/* sys32_sigsuspend */
++	.long -1			/* compat_sys_sigpending */
++	.long __NR_sethostname		/* sys_sethostname */
++	.long __NR_setrlimit		/* compat_sys_setrlimit */
++	.long __NR_getrlimit		/* compat_sys_old_getrlimit */
++	.long __NR_getrusage		/* compat_sys_getrusage */
++	.long __NR_gettimeofday		/* compat_sys_gettimeofday */
++	.long __NR_settimeofday		/* compat_sys_settimeofday */
++	.long __NR_getgroups		/* sys_getgroups16 */
++	.long __NR_setgroups		/* sys_setgroups16 */
++	.long -1			/* compat_sys_old_select */
++	.long __NR_symlink		/* sys_symlink */
++	.long __NR_lstat		/* sys_lstat */
++	.long __NR_readlink		/* sys_readlink */
++	.long __NR_uselib		/* sys_uselib */
++	.long __NR_swapon		/* sys_swapon */
++	.long __NR_reboot		/* sys_reboot */
++	.long -1			/* compat_sys_old_readdir */
++	.long __NR_mmap			/* sys32_mmap */
++	.long __NR_munmap		/* sys_munmap */
++	.long __NR_truncate		/* sys_truncate */
++	.long __NR_ftruncate		/* sys_ftruncate */
++	.long __NR_fchmod		/* sys_fchmod */
++	.long __NR_fchown		/* sys_fchown16 */
++	.long __NR_getpriority		/* sys_getpriority */
++	.long __NR_setpriority		/* sys_setpriority */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_statfs		/* compat_sys_statfs */
++	.long __NR_fstatfs		/* compat_sys_fstatfs */
++	.long __NR_ioperm		/* sys_ioperm */
++	.long -1			/* compat_sys_socketcall */
++	.long __NR_syslog		/* sys_syslog */
++	.long -1			/* compat_sys_setitimer */
++	.long -1			/* compat_sys_getitimer */
++	.long __NR_stat			/* compat_sys_newstat */
++	.long __NR_lstat		/* compat_sys_newlstat */
++	.long __NR_fstat		/* compat_sys_newfstat */
++	.long __NR_uname		/* sys_uname */
++	.long __NR_iopl			/* stub32_iopl */
++	.long __NR_vhangup		/* sys_vhangup */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* sys32_vm86_warning */
++	.long __NR_wait4		/* compat_sys_wait4 */
++	.long __NR_swapoff		/* sys_swapoff */
++	.long __NR_sysinfo		/* compat_sys_sysinfo */
++	.long -1			/* sys32_ipc */
++	.long __NR_fsync		/* sys_fsync */
++	.long -1			/* stub32_sigreturn */
++	.long __NR_clone		/* stub32_clone */
++	.long __NR_setdomainname	/* sys_setdomainname */
++	.long __NR_uname		/* sys_newuname */
++	.long -1			/* sys_modify_ldt */
++	.long __NR_adjtimex		/* compat_sys_adjtimex */
++	.long __NR_mprotect		/* sys32_mprotect */
++	.long -1			/* compat_sys_sigprocmask */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* sys_init_module */
++	.long -1			/* sys_delete_module */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_quotactl		/* sys32_quotactl */
++	.long __NR_getpgid		/* sys_getpgid */
++	.long __NR_fchdir		/* sys_fchdir */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_sysfs		/* sys_sysfs */
++	.long __NR_personality		/* sys_personality */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_setfsuid		/* sys_setfsuid16 */
++	.long __NR_setfsgid		/* sys_setfsgid16 */
++	.long -1			/* sys_llseek */
++	.long __NR_getdents		/* compat_sys_getdents */
++	.long __NR_select		/* compat_sys_select */
++	.long __NR_flock		/* sys_flock */
++	.long __NR_msync		/* sys_msync */
++	.long __NR_readv		/* compat_sys_readv */
++	.long __NR_writev		/* compat_sys_writev */
++	.long __NR_getsid		/* sys_getsid */
++	.long __NR_fdatasync		/* sys_fdatasync */
++	.long __NR__sysctl		/* compat_sys_sysctl */
++	.long __NR_mlock		/* sys_mlock */
++	.long __NR_munlock		/* sys_munlock */
++	.long __NR_mlockall		/* sys_mlockall */
++	.long __NR_munlockall		/* sys_munlockall */
++	.long -1			/* sys_sched_setparam */
++	.long -1			/* sys_sched_getparam */
++	.long -1			/* sys_sched_setscheduler */
++	.long -1			/* sys_sched_getscheduler */
++	.long -1			/* sys_sched_yield */
++	.long -1			/* sys_sched_get_priority_max */
++	.long -1			/* sys_sched_get_priority_min */
++	.long -1			/* sys32_sched_rr_get_interval */
++	.long __NR_nanosleep		/* compat_sys_nanosleep */
++	.long __NR_mremap		/* sys_mremap */
++	.long __NR_setresuid		/* sys_setresuid16 */
++	.long __NR_getresuid		/* sys_getresuid16 */
++	.long -1			/* sys32_vm86_warning */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_poll			/* sys_poll */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_setresgid		/* sys_setresgid16 */
++	.long __NR_getresgid		/* sys_getresgid16 */
++	.long __NR_prctl		/* sys_prctl */
++	.long -1			/* stub32_rt_sigreturn */
++	.long -1			/* sys32_rt_sigaction */
++	.long -1			/* sys32_rt_sigprocmask */
++	.long -1			/* sys32_rt_sigpending */
++	.long __NR_rt_sigtimedwait	/* compat_sys_rt_sigtimedwait */
++	.long -1			/* sys32_rt_sigqueueinfo */
++	.long -1			/* sys_rt_sigsuspend */
++	.long __NR_pread64		/* sys32_pread */
++	.long __NR_pwrite64		/* sys32_pwrite */
++	.long __NR_chown		/* sys_chown16 */
++	.long __NR_getcwd		/* sys_getcwd */
++	.long __NR_capget		/* sys_capget */
++	.long __NR_capset		/* sys_capset */
++	.long __NR_sigaltstack		/* stub32_sigaltstack */
++	.long __NR_sendfile		/* sys32_sendfile */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_vfork		/* stub32_vfork */
++	.long __NR_getrlimit		/* compat_sys_getrlimit */
++	.long -1			/* sys_mmap_pgoff */
++	.long __NR_truncate		/* sys32_truncate64 */
++	.long __NR_ftruncate		/* sys32_ftruncate64 */
++	.long __NR_stat			/* sys32_stat64 */
++	.long __NR_lstat		/* sys32_lstat64 */
++	.long __NR_fstat		/* sys32_fstat64 */
++	.long __NR_lchown		/* sys_lchown */
++	.long __NR_getuid		/* sys_getuid */
++	.long __NR_getgid		/* sys_getgid */
++	.long __NR_geteuid		/* sys_geteuid */
++	.long __NR_getegid		/* sys_getegid */
++	.long __NR_setreuid		/* sys_setreuid */
++	.long __NR_setregid		/* sys_setregid */
++	.long __NR_getgroups		/* sys_getgroups */
++	.long __NR_setgroups		/* sys_setgroups */
++	.long __NR_fchown		/* sys_fchown */
++	.long __NR_setresuid		/* sys_setresuid */
++	.long __NR_getresuid		/* sys_getresuid */
++	.long __NR_setresgid		/* sys_setresgid */
++	.long __NR_getresgid		/* sys_getresgid */
++	.long __NR_chown		/* sys_chown */
++	.long __NR_setuid		/* sys_setuid */
++	.long __NR_setgid		/* sys_setgid */
++	.long __NR_setfsuid		/* sys_setfsuid */
++	.long __NR_setfsgid		/* sys_setfsgid */
++	.long -1			/* sys_pivot_root */
++	.long __NR_mincore		/* sys_mincore */
++	.long __NR_madvise		/* sys_madvise */
++	.long __NR_getdents64		/* compat_sys_getdents64 */
++	.long __NR_fcntl		/* compat_sys_fcntl64 */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_gettid		/* sys_gettid */
++	.long __NR_readahead		/* sys32_readahead */
++	.long __NR_setxattr		/* sys_setxattr */
++	.long __NR_lsetxattr		/* sys_lsetxattr */
++	.long __NR_fsetxattr		/* sys_fsetxattr */
++	.long __NR_getxattr		/* sys_getxattr */
++	.long __NR_lgetxattr		/* sys_lgetxattr */
++	.long __NR_fgetxattr		/* sys_fgetxattr */
++	.long __NR_listxattr		/* sys_listxattr */
++	.long __NR_llistxattr		/* sys_llistxattr */
++	.long __NR_flistxattr		/* sys_flistxattr */
++	.long __NR_removexattr		/* sys_removexattr */
++	.long __NR_lremovexattr		/* sys_lremovexattr */
++	.long __NR_fremovexattr		/* sys_fremovexattr */
++	.long __NR_tkill		/* sys_tkill */
++	.long __NR_sendfile		/* sys_sendfile64 */
++	.long __NR_futex		/* compat_sys_futex */
++	.long -1			/* compat_sys_sched_setaffinity */
++	.long -1			/* compat_sys_sched_getaffinity */
++	.long __NR_set_thread_area	/* sys_set_thread_area */
++	.long __NR_get_thread_area	/* sys_get_thread_area */
++	.long -1			/* compat_sys_io_setup */
++	.long -1			/* sys_io_destroy */
++	.long -1			/* compat_sys_io_getevents */
++	.long -1			/* compat_sys_io_submit */
++	.long -1			/* sys_io_cancel */
++	.long __NR_fadvise64		/* sys32_fadvise64 */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_exit_group		/* sys_exit_group */
++	.long -1			/* sys32_lookup_dcookie */
++	.long __NR_epoll_create		/* sys_epoll_create */
++	.long __NR_epoll_ctl		/* sys_epoll_ctl */
++	.long __NR_epoll_wait		/* sys_epoll_wait */
++	.long -1			/* sys_remap_file_pages */
++	.long -1			/* sys_set_tid_address */
++	.long __NR_timer_create		/* compat_sys_timer_create */
++	.long __NR_timer_settime	/* compat_sys_timer_settime */
++	.long __NR_timer_gettime	/* compat_sys_timer_gettime */
++	.long __NR_timer_getoverrun	/* sys_timer_getoverrun */
++	.long __NR_timer_delete		/* sys_timer_delete */
++	.long __NR_clock_settime	/* compat_sys_clock_settime */
++	.long __NR_clock_gettime	/* compat_sys_clock_gettime */
++	.long -1			/* compat_sys_clock_getres */
++	.long __NR_clock_nanosleep	/* compat_sys_clock_nanosleep */
++	.long __NR_statfs		/* compat_sys_statfs64 */
++	.long __NR_fstatfs		/* compat_sys_fstatfs64 */
++	.long __NR_tgkill		/* sys_tgkill */
++	.long __NR_utimes		/* compat_sys_utimes */
++	.long __NR_fadvise64		/* sys32_fadvise64_64 */
++	.long -1			/* quiet_ni_syscall */
++	.long __NR_mbind		/* sys_mbind */
++	.long -1			/* compat_sys_get_mempolicy */
++	.long -1			/* sys_set_mempolicy */
++	.long __NR_mq_open		/* compat_sys_mq_open */
++	.long __NR_mq_unlink		/* sys_mq_unlink */
++	.long __NR_mq_timedsend		/* compat_sys_mq_timedsend */
++	.long __NR_mq_timedreceive	/* compat_sys_mq_timedreceive */
++	.long -1			/* compat_sys_mq_notify */
++	.long -1			/* compat_sys_mq_getsetattr */
++	.long -1			/* compat_sys_kexec_load */
++	.long __NR_waitid		/* compat_sys_waitid */
++	.long -1			/* quiet_ni_syscall */
++	.long -1			/* sys_add_key */
++	.long -1			/* sys_request_key */
++	.long __NR_keyctl		/* sys_keyctl */
++	.long -1			/* sys_ioprio_set */
++	.long -1			/* sys_ioprio_get */
++	.long -1			/* sys_inotify_init */
++	.long -1			/* sys_inotify_add_watch */
++	.long -1			/* sys_inotify_rm_watch */
++	.long -1			/* sys_migrate_pages */
++	.long __NR_openat		/* compat_sys_openat */
++	.long __NR_mkdirat		/* sys_mkdirat */
++	.long __NR_mknodat		/* sys_mknodat */
++	.long __NR_fchownat		/* sys_fchownat */
++	.long __NR_futimesat		/* compat_sys_futimesat */
++	.long __NR_fstat		/* sys32_fstatat */
++	.long __NR_unlinkat		/* sys_unlinkat */
++	.long __NR_renameat		/* sys_renameat */
++	.long __NR_linkat		/* sys_linkat */
++	.long __NR_symlinkat		/* sys_symlinkat */
++	.long __NR_readlinkat		/* sys_readlinkat */
++	.long __NR_fchmodat		/* sys_fchmodat */
++	.long __NR_faccessat		/* sys_faccessat */
++	.long __NR_pselect6		/* compat_sys_pselect6 */
++	.long __NR_ppoll		/* compat_sys_ppoll */
++	.long __NR_unshare		/* sys_unshare */
++	.long -1			/* compat_sys_set_robust_list */
++	.long -1			/* compat_sys_get_robust_list */
++	.long __NR_splice		/* sys_splice */
++	.long __NR_sync_file_range	/* sys32_sync_file_range */
++	.long __NR_tee			/* sys_tee */
++	.long __NR_vmsplice		/* compat_sys_vmsplice */
++	.long -1			/* compat_sys_move_pages */
++	.long __NR_getcpu		/* sys_getcpu */
++	.long __NR_epoll_pwait		/* sys_epoll_pwait */
++	.long __NR_utimensat		/* compat_sys_utimensat */
++	.long __NR_signalfd		/* compat_sys_signalfd */
++	.long __NR_timerfd_create	/* sys_timerfd_create */
++	.long __NR_eventfd		/* sys_eventfd */
++	.long __NR_fallocate		/* sys32_fallocate */
++	.long __NR_timerfd_settime	/* compat_sys_timerfd_settime */
++	.long __NR_timerfd_gettime	/* compat_sys_timerfd_gettime */
++	.long __NR_signalfd4		/* compat_sys_signalfd4 */
++	.long __NR_eventfd2		/* sys_eventfd2 */
++	.long __NR_epoll_create1	/* sys_epoll_create1 */
++	.long __NR_dup3			/* sys_dup3 */
++	.long __NR_pipe2		/* sys_pipe2 */
++	.long -1			/* sys_inotify_init1 */
++	.long __NR_preadv		/* compat_sys_preadv */
++	.long __NR_pwritev		/* compat_sys_pwritev */
++	.long -1			/* compat_sys_rt_tgsigqueueinfo */
++	.long __NR_perf_event_open	/* sys_perf_event_open */
++	.long __NR_recvmmsg		/* compat_sys_recvmmsg */
++	.long -1			/* sys_fanotify_init */
++	.long -1			/* sys32_fanotify_mark */
++	.long __NR_prlimit64		/* sys_prlimit64 */
++	.long -1			/* sys_name_to_handle_at */
++	.long __NR_open_by_handle_at	/* compat_sys_open_by_handle_at */
++	.long __NR_clock_adjtime	/* compat_sys_clock_adjtime */
++	.long __NR_syncfs		/* sys_syncfs */
++	.long __NR_sendmmsg		/* compat_sys_sendmmsg */
++#endif
+\ No newline at end of file
 diff --git a/arch/x86/include/asm/thread_info.h b/arch/x86/include/asm/thread_info.h
 index a1fe5c1..0c92e36 100644
 --- a/arch/x86/include/asm/thread_info.h
@@ -239,10 +721,10 @@ index a5e502f..1dff6c7 100644
  subdir-$(CONFIG_INTEGRITY)		+= integrity
 diff --git a/security/syscalls_cgroup.c b/security/syscalls_cgroup.c
 new file mode 100644
-index 0000000..e69b7fe
+index 0000000..a94f0a5
 --- /dev/null
 +++ b/security/syscalls_cgroup.c
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,299 @@
 +/*
 + * security/syscalls_cgroup.c - syscalls cgroup subsystem
 + *
@@ -260,7 +742,7 @@ index 0000000..e69b7fe
 +#include <linux/slab.h>
 +
 +struct syscalls_cgroup {
-+	unsigned long *syscalls_bitmap;
++	unsigned long syscalls_bitmap[BITS_TO_LONGS(NR_syscalls)];
 +	struct cgroup_subsys_state css;
 +	unsigned deny_bit_count;
 +};
@@ -320,12 +802,6 @@ index 0000000..e69b7fe
 +	scg = kmalloc(sizeof(*scg), GFP_KERNEL);
 +	if (!scg)
 +		return ERR_PTR(-ENOMEM);
-+	scg->syscalls_bitmap = kmalloc(BITS_TO_LONGS(NR_syscalls) * sizeof(unsigned long),
-+								GFP_KERNEL);
-+	if (!scg->syscalls_bitmap) {
-+		kfree(scg);
-+		return ERR_PTR(-ENOMEM);
-+	}
 +
 +	if (cgroup->parent) {
 +		parent_scg = cgroup_to_scg(cgroup->parent);
@@ -347,7 +823,7 @@ index 0000000..e69b7fe
 +							struct cgroup *cgroup)
 +{
 +	struct syscalls_cgroup *scg = cgroup_to_scg(cgroup);
-+	kfree(scg->syscalls_bitmap);
++	free_css_id(&syscalls_subsys, &scg->css);
 +	kfree(scg);
 +}
 +
@@ -499,7 +975,10 @@ index 0000000..e69b7fe
 +		rcu_read_lock();
 +		while ((next_css = css_get_next(&syscalls_subsys,
 +						id, &scg->css, &found))) {
-+			syscalls_cgroup_deny_syscall(next_css->cgroup, number);
++			if (css_tryget(next_css)) {
++				syscalls_cgroup_deny_syscall(next_css->cgroup, number);
++				css_put(next_css);
++			}
 +			id = found + 1;
 +		}
 +		rcu_read_unlock();

@@ -1,0 +1,7 @@
+Simple system tests framework for syscalls cgroup subsystem
+===========================================================
+
+To run test suites simply do './do_system_tests.sh' with root permissions.
+
+There are some important globals set in do_system_tests.sh so review this file
+first if something does not work.

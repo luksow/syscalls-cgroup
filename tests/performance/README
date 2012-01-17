@@ -1,0 +1,30 @@
+Performance tests for syscalls cgroup subsystem
+===============================================
+
+Performance tests are split into microbenchmarks and macrobenchmarks.
+Microbenchmarks test performance of single syscall ('getuid', 'setuid', 'chdir'
+and 'read'). Macrobenchmarks test performance of typical applications ('gzip',
+kernel compilation, 'find' + 'cat').
+
+Microbenchmarks
+---------------
+
+To run microbenchmarks compile samples using 'make' in 'microbenchmarks'
+directory and then do './bootstrapper.sh $1 $2'. First arg is number of tests to
+execute, second arg is number of syscalls in a single test. Review
+'bootstrapper.sh' if in doubt.
+First line of output are times (in seconds) '%real %user %sys' for 'getuid'
+executed $2 times; second for 'setuid', third for 'chdir', fourth for 'read' and
+then wrap around. Modify 'time.sh' to change output format.
+
+Macrobenchmarks
+---------------
+
+To run macrobenchmarks you need to download 3.1.6 linux kernel:
+$ wget http://www.kernel.org/pub/linux/kernel/v3.0/linux-3.1.5.tar.bz2
+There is no bootstrapper for all tests, you run them manually:
+'./gzip.sh $1' or './kernel_compile.sh $1' or './kernel_walk.sh $1'. First arg
+is number of tests to execute.
+Test output is similar to microbenchmarks. Each line contains '%real %user %sys'
+times (in seconds) for single test execution.
+You can change various settings by modifying '*.sh' files.

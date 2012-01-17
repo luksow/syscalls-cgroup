@@ -1,0 +1,102 @@
+Syscalls cgroup subsystem for Linux
+===================================
+
+Syscalls is a cgroup subsystem that enables you to allow/deny specified system
+calls for tasks in a given control group. It may be useful for hardening Linux
+distributions by creating sandboxes of different kinds.
+
+Installation
+------------
+
+To install this subsystem you have to apply supplied patch for a proper Linux source
+tree. You do it typically for Linux patches:
+
+$ ls
+syscalls_cgroup.patch
+$ wget http://www.kernel.org/pub/linux/kernel/v3.0/linux-3.1.5.tar.bz2
+$ tar -xjf linux-3.1.5.tar.bz2
+$ cd linux-3.1.5
+$ patch -p1 -s < ../syscalls_cgroup.patch
+$ make menuconfig
+...
+General setup -->
+		  [*] Control Group support -->
+		  		  [*] Syscalls controller for cgroups
+...
+$ make
+...
+Kernel: arch/x86/boot/bzImage is ready  (#1)
+...
+
+Usage
+-----
+
+You use this subsystem by mounting it into directory tree and echoing syscalls
+numbers into syscalls.allow and syscalls.deny files to allow/deny certain
+syscalls. For more info review Documentation/cgroups/cgroups.txt file in kernel
+directory.
+
+Example:
+
+# mkdir /cgroup
+# mount -t tmpfs cgroup_root /cgroup
+# cd /cgroup
+# mkdir syscalls
+# mount -t cgroup -o syscalls syscalls_root syscalls
+# ls
+cgroup.clone_children	cgroup.procs			release_agent		syscalls.deny
+cgroup.event_control	notify_on_release	syscalls.allow	tasks
+# cat syscalls.allow
+0 1 ... 311
+# cat syscalls.deny
+
+# cat tasks
+1
+2
+...
+# mkdir test1
+# cd test1
+# ls
+cgroup.clone_children	cgroup.procs				syscalls.allow		tasks
+cgroup.event_control	notify_on_release		syscalls.deny
+# echo 0 > tasks
+# cat tasks
+2357
+2374
+# echo 83 > syscalls.deny # assume 83 is syscall number for 'mkdir'
+# cat syscalls.deny
+83
+# mkdir test2
+mkdir: cannot create directory 'test2': Function not implemented
+# echo 83 > syscalls.allow
+# mkdir test2
+# cd ..
+# echo 83 > syscalls.deny
+# cd test1
+# mkdir test3
+mkdir: cannot create directory 'test3': Function not implemented
+# echo 83 > syscalls.allow
+-bash: echo: write error: Operation not permitted
+
+Testing
+-------
+
+Subsystem comes with set of performance and system tests. For further info go to
+'tests' directory.
+
+Compatibility
+-------------
+
+Subsystem was tested with 3.1.x Linux kernels. Currently it supports only x86
+and x86-64 architectures.
+
+License
+-------
+
+See COPYING file.
+
+Contact
+-------
+
+Lukasz Sowa
+Mail: luksow@gmail.com
